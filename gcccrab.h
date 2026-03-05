@@ -60,6 +60,7 @@ struct GCCCRAB {
     char *atresult;                /* for asctime() */
     struct tm *gmtimetm;           /* for gmtime() */
     char *strfbuf;                 /* for strftime() */
+    struct SUBCOMREG *subcomlist;  /* list of SUBCOM entries */
 };
 
 /* To get the addresses of the crab */

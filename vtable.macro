@@ -263,5 +263,12 @@ TIME     VTENTRY
 * Entry points in REXXSAA C / REXXSAA H                               *
 ***********************************************************************
 RXVARPOL VTENTRY
+***********************************************************************
+* Entry points in CMSSCOMC C / CMSSCOM ASSEMBLE                       *
+***********************************************************************
+@@SCMSET VTENTRY
+@@SCMCLR VTENTRY
+@@SCMQRY VTENTRY
+@@SUBCOM VTENTRY
 *
          MEND

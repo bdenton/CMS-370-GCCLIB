@@ -1,0 +1,292 @@
+*********************************************************************** 00010000
+* CMSSCOM contains C functions interfacing with CMS SUBCOM            * 00020000
+*    @@SUBCOM Handles SUNCOM macro invocations                        * 00030000
+*    SCOMENTR Actual SUBCOM entry point called from CMS               * 00040000
+*                                                                     * 00050000
+* William Denton, Los Angeles, California; 2026                       * 00060000
+* Released to the public domain.                                      * 00070000
+*********************************************************************** 00080000
+CMSSCOM  CSECT ,                                                        00090000
+         USING CMSSCOM,R12                                              00100000
+         USING CMSCRAB,R13    map the save area                         00110000
+         EJECT ,                                                        00120000
+*********************************************************************** 00130000
+* @@SUBCOM Entry Point                                                * 00140000
+* Call CMS SUBCOM functions via the SUBCOM macro                      * 00150000
+*                                                                     * 00160000
+* Syntax is:                                                          * 00170000
+*    __SUBCOM(short op, SUBCOMREG scomreg)                            * 00180000
+* where:                                                              * 00190000
+*    op        is the SUBCOM operation to be performed:               * 00200000
+*              1 : call SUBCOM SET to register a new SUBCOM processor * 00210000
+*              2 : call SUBCOM CLR to delete a SUBCOM processor       * 00220000
+*              3 : call SUBCOM QUERY to retrieve the SCBLOCK for      * 00230000
+*                  an existing SUBCOM processor                       * 00240000
+*    scomreg   is address of the SUBCOMREG structure built by the     * 00250000
+*              C SUBCOM management functions                          * 00260000
+* returns:                                                            * 00270000
+*    (int)     Return code from the CMS SUBCOM call for SET and CLR   * 00280000
+*              functions.                                             * 00290000
+*    SCBLOCK*  Is returned for the QUERY calls                        * 00300000
+*********************************************************************** 00310000
+         PUSH  USING                                                    00320000
+@@SUBCOM PDPPRLG CINDEX=0,FRAME=LCLSTKLN,BASER=12,ENTRY=YES             00330000
+         LA    R15,@@SUBCOM-CMSSCOM                                     00340000
+         SLR   R12,R15                                                  00350000
+         USING CMSSCOM,R12                                              00360000
+         L     R10,4(,R1)         parm2 : SUBCOMREG block               00370000
+         USING SUBCOMRG,R10       (address SUBCOMREG structures)        00380000
+*                                                                       00390000
+         L     R1,0(,R1)          parm1 : function to perform           00400000
+* TODO: make min/max symbolic                                           00410000
+         LA    R0,1               Minimum op value                      00420000
+         CR    R1,R0              ...                                   00430000
+         BL    BADOP              ...                                   00440000
+         LA    R0,3               Maximum op value                      00450000
+         CR    R1,R0              ...                                   00460000
+         BH    BADOP              ...                                   00470000
+* --------------------------------------------------------------------- 00480000
+*        Prepare to issue the SUBCOM macro                              00490000
+* --------------------------------------------------------------------- 00500000
+         XC    SUBCOMPL(SCOMPLEN),SUBCOMPL Clear it all to zeroes       00510000
+         MVC   SUBCOMPL(8),=CL8'SUBCOM'    Move in command name         00520000
+*                                                                       00530000
+         BCTR  R1,0               Change to zero-based                  00540000
+         SLL   R1,3               and as a dword index                  00550000
+         LA    R2,OPVERBS(R1)     -> op name for messages               00560000
+         MVC   SCOMVERB,0(R2)     ...                                   00570000
+         SRL   R1,1               change to branch index                00580000
+         B     *+4(R1)            choose the right case                 00590000
+         B     SCOMSET            1 = SET                               00600000
+         B     SCOMCLR            2 = CLR                               00610000
+         B     SCOMQRY            3 = QUERY                             00620000
+* --------------------------------------------------------------------- 00630000
+*        Call SUBCOM SET to register a new SUBCOM provider              00640000
+* --------------------------------------------------------------------- 00650000
+SCOMSET  DS    0H                                                       00660000
+         SUBCOM SET,              Define new SUBCOM service            *00670000
+               NAME=SCOMNAME,     with this name                       *00680000
+               ENTRY=SCOMENTR,    and our handler                      *00690000
+               UWORD=(R10),       passing the SUBCOMREG                *00700000
+               ERROR=SCOMERR,     errors go here                       *00710000
+               MF=(E,SUBCOMPL)                                          00720000
+         B     SCOMRC0            and return to caller                  00730000
+* --------------------------------------------------------------------- 00740000
+*        Call SUBCOM CLR to unregister an SUBCOM provider               00750000
+* --------------------------------------------------------------------- 00760000
+SCOMCLR  DS    0H                                                       00770000
+         SUBCOM CLR,              Delete as SUBCOM service             *00780000
+               NAME=SCOMNAME,     with this name                       *00790000
+               ERROR=SCOMERR,     errors go here                       *00800000
+               MF=(E,SUBCOMPL)                                          00810000
+         B     SCOMRC0            and return to caller                  00820000
+* --------------------------------------------------------------------- 00830000
+*        Call SUBCOM QUERY to get the SCBLOCK for the sprovider         00840000
+* --------------------------------------------------------------------- 00850000
+SCOMQRY  DS    0H                                                       00860000
+         SUBCOM QUERY,            Get the SCBLOCK for the service      *00870000
+               NAME=SCOMNAME,     with this name                       *00880000
+               MF=(E,SUBCOMPL)                                          00890000
+         LTR   R15,R15            is it there?                          00900000
+         BNZ   SCOMRC0            ..no, return NULL                     00910000
+         LR    R15,R1             else return the SCBLOCK address       00920000
+         B     SCOMRET            and return to caller                  00930000
+* --------------------------------------------------------------------- 00940000
+*        Return to calling program                                      00950000
+* --------------------------------------------------------------------- 00960000
+BADOP    DS    0H                                                       00970000
+         LR    R2,R1                                                    00980000
+         DMSERR TEXT='Invalid operation (...) for CMScallSubcom',      *00990000
+               NUM=12,LET=E,CSECT=GCC,DOT=NO, SUB=(DEC,(R2))            01000000
+         LA    R15,12                                                   01010000
+         B     SCOMRET                                                  01020000
+*                                                                       01030000
+SCOMERR  DS    0H                                                       01040000
+         LR    R2,R15             Save the RC                           01050000
+         MVC   LINEDITL(LINEDISZ),LINEDITP Set pattern                  01060000
+         DMSERR TEXT='Error issuing SUBCOM ........ for "........". (RC*01070000
+               =....)',NUM=(R2),LET=E,CSECT=GCC,DOT=NO,                *01080000
+               SUB=(CHAR8A,SCOMVERB,CHAR8A,SCOMNAME),                  *01090000
+               MF=(E,LINEDITL)                                          01100000
+         LR    R15,R2                                                   01110000
+         B     SCOMRET                                                  01120000
+*                                                                       01130000
+SCOMRC0  DS    0H                                                       01140000
+         SR    R15,R15                                                  01150000
+SCOMRET  DS    0H                                                       01160000
+         PDPEPIL ,                                                      01170000
+         POP   USING                                                    01180000
+         EJECT ,                                                        01190000
+*********************************************************************** 01200000
+* SCOMENTR Entry Point                                                * 01210000
+* The entry point from CMS for every C SUBCOM processor               * 01220000
+*                                                                     * 01230000
+* This is called from CMS via SVC 202 with the following:             * 01240000
+*    R0 : whatever is set up by the caller. For bREXX,                * 01250000
+*         this points to an EPLIST. This is not guaranteed            * 01260000
+*         for other consomers of the SUBCOM service.                  * 01270000
+*    R1 : as set up by the caller. Usually a PLIST but minimally      * 01280000
+*         it starts with the 8 character SUBCOM name. Other cases     * 01290000
+*         could have this look like an FSCB                           * 01300000
+*    R2 : points to the SCBLOCK for the SUBCOM processor. From        * 01310000
+*         there, the SCBWKWRD field will point to the SUBCOMREG       * 01320000
+*                                                                     * 01330000
+*    R13 : points to a 18 doubleword area for our use                 * 01340000
+*                                                                     * 01350000
+* returns:                                                            * 01360000
+*    (int)     Return code from the SUBCOM provider                   * 01370000
+*********************************************************************** 01380000
+         PUSH  USING                                                    01390000
+         ENTRY SCOMENTR                                                 01400000
+SCOMENTR DS    0D                                                       01410000
+* --------------------------------------------------------------------- 01420000
+*        R13 points to a 18 dword area provided by CMS. The 1st 18      01430000
+*        words will be used as a "standard" register save area.         01440000
+*        There is no linkage from this back to the GCCCMS environment.  01450000
+* --------------------------------------------------------------------- 01460000
+         USING CMSCRAB,R13        This is misleading since it really    01470000
+*                                 isn't a CMSCRAB but it allows us to   01480000
+*                                 use labels to reference parts of the  01490000
+*                                 9 dword USAVE provided by CMS         01500000
+         STM   R14,R12,GR14       Save CMS registers                    01510000
+         LR    R12,R15            Transfer base to R12                  01520000
+         LA    R15,SCOMENTR-CMSSCOM                                     01530000
+         SLR   R12,R15                                                  01540000
+         USING CMSSCOM,R12                                              01550000
+*                                                                       01560000
+         LR    R3,R0              Preserve possible EPLIST ptr          01570000
+         LR    R4,R1              and possible PLIST ptr                01580000
+* --------------------------------------------------------------------- 01590000
+*        Pick up the SUBCOMREG structure passed                         01600000
+* --------------------------------------------------------------------- 01610000
+         USING SCBLOCK,R2                                               01620000
+         L     R10,SCBWKWRD       The user data word points to...       01630000
+         USING SUBCOMRG,R10       ... the SUBCOMREG                     01640000
+         DROP  R2                 (maybe finished with the SCBLOCK)     01650000
+* --------------------------------------------------------------------- 01660000
+*        Build parameter list for the "real" SUBCOM processor           01670000
+* --------------------------------------------------------------------- 01680000
+         LA    R5,PARMLIST        Put parm list right after regs        01690000
+         ST    R2,0(,R5)          Parm1 : SCBLOCK*                      01700000
+         SRL   R1,24              Parm2 : call type                     01710000
+         ST    R1,4(,R5)          ...                                   01720000
+         ST    R4,8(,R5)          Parm3 : PLIST*                        01730000
+         ST    R3,12(,R5)         Parm4 : EPLIST* (maybe)               01740000
+* --------------------------------------------------------------------- 01750000
+*        Build a new CMSCRAB. It won't have any linkage back            01760000
+*        to any existing GCC stacks. It will, however, be linked        01770000
+*        to the GCCCRAB environment that contains the SUBCOM.           01780000
+*        Also, this CRAB will just have a miniumu size stack (1k vs 4k) 01790000
+*        This is done by combining code from CMSENTRY and __cstub       01800000
+* --------------------------------------------------------------------- 01810000
+         LA    R0,MINSTKLN/8      stack length in doublewords           01820000
+         DMSFREE DWORDS=(0),ERR=NOMEM,TYPCALL=SVC,TYPE=USER             01830000
+         ST    R1,FORWARD         chain backward (our save area)        01840000
+         ST    R13,BACK-CMSCRAB(,R1) Chain forward                      01850000
+*                                       (caller's save area)            01860000
+         LR    R13,R1             establish initial stack frame         01870000
+         USING CMSCRAB,R13                                              01880000
+*                                                                       01890000
+         LA    R2,MAINSTK         where the GCC stack begins            01900000
+         ST    R2,STACKNXT        next available spot in stack          01910000
+         LA    R2,MINSTKLN(,R13)  Point past the stack end              01920000
+         ST    R2,DSTACK          Dynamic stack control                 01930000
+         MVI   DSTACK,X'01'       Set flag to 01 = static stack         01940000
+*                                                                       01950000
+         L     R1,SCOMCRAB        Add parent GCCCRAB to new CMSCRAB     01960000
+         ST    R1,GCCCRABA                                              01970000
+* --------------------------------------------------------------------- 01980000
+*        Call the real SUBCOM processor                                 01990000
+* --------------------------------------------------------------------- 02000000
+         LR    R1,R5              -> parameters built above             02010000
+         L     R15,SCOMHNDL       Get the handler address               02020000
+         BALR  R14,R15            Call the real SUBCOM processor        02030000
+* --------------------------------------------------------------------- 02040000
+*        Normal return from the SUBCOM processor.                       02050000
+*        Clean up and return to CMS.                                    02060000
+* --------------------------------------------------------------------- 02070000
+         LR    R5,R15             save the return code                  02080000
+         LA    R0,MINSTKLN/8      our stack length in doublewords       02090000
+         LR    R1,R13             the local stack to release            02100000
+         L     R13,BACK           go back to (s/b) the CMS USAVE area   02110000
+         DMSFRET DWORDS=(0),LOC=(1),ERR=*,TYPCALL=SVC                   02120000
+         LR    R15,R5             reclaim return code                   02130000
+RETURN   DS    0H                                                       02140000
+         L     R14,GR14           restore return address                02150000
+         LM    R0,R12,GR0         restore our caller's registers        02160000
+         BR    R14                return to CMS                         02170000
+         SPACE 1                                                        02180000
+NOMEM    DS    0H                 memory allocation failed              02190000
+         LA    R2,(MINSTKLN+7)/8  stack length in doublewords           02200000
+         DMSERR TEXT='Error allocating ...... doublewords for C stack',*02210000
+               SUB=(DEC,(R2)),NUM=57,LET=E,CSECT=GCC,DOT=NO             02220000
+         LA    R15,57         perhaps should issue an error message     02230000
+         B     RETURN                                                   02240000
+         SPACE 1                                                        02250000
+         POP   USING                                                    02260000
+         EJECT ,                                                        02270000
+* --------------------------------------------------------------------- 02280000
+* Literal pool                                                          02290000
+* --------------------------------------------------------------------- 02300000
+         LTORG ,                                                        02310000
+         EJECT ,                                                        02320000
+OPVERBS  DS    0D                                                       02330000
+         DC    CL8'SET'                                                 02340000
+         DC    CL8'CLR'                                                 02350000
+         DC    CL8'QUERY'                                               02360000
+* --------------------------------------------------------------------- 02370000
+* Templates for MF=(E,...) macro calls                                  02380000
+* --------------------------------------------------------------------- 02390000
+LINEDITP DMSERR MF=L,MAXSUBS=5                                          02400000
+LINEDISZ EQU   *-LINEDITP                                               02410000
+         EJECT                                                          02420000
+* --------------------------------------------------------------------- 02430000
+*        The    C M S C R A B                                           02440000
+* --------------------------------------------------------------------- 02450000
+         CMSCRAB ,            COntinually addressed by R13              02460000
+*                                                                       02470000
+*        Parameters built in the CMS USAVE                              02480000
+PARMLIST EQU   CMSCRAB+18*4   Build parameters after the registers      02490000
+*                                                                       02500000
+* --------------------------------------------------------------------- 02510000
+*        the SUBCOM initial entry does not need a 4k stack              02520000
+* --------------------------------------------------------------------- 02530000
+MINLEN   EQU   1024                    Minimum stack length             02540000
+MINSTKLN EQU   1024+MAINSTK-CMSCRAB    length of the minimum CRAB       02550000
+* --------------------------------------------------------------------- 02560000
+*        working storage for this module                                02570000
+* --------------------------------------------------------------------- 02580000
+         ORG   MAINSTK        Local variables start here                02590000
+SCOMVERB DS    CL8            SUBCOM verb qith error                    02600000
+*                                                                       02610000
+PLISTS   DS    0D             Plists will be built here                 02620000
+*                                                                       02630000
+*        Since SUBCOM MF=L doesn't work the way you would expect,       02640000
+*        we will just allocate the space needed for the longest         02650000
+*        parameter list (for SET function)                              02660000
+SUBCOMPL DS    8D                                                       02670000
+SCOMPLEN EQU   *-SUBCOMPL                                               02680000
+*                                                                       02690000
+         ORG   PLISTS         They can all overlap                      02700000
+LINEDITL DMSERR MF=L,MAXSUBS=5                                          02710000
+* --------------------------------------------------------------------- 02720000
+*        Local stack end when __subcom is called                        02730000
+* --------------------------------------------------------------------- 02740000
+         ORG   ,                                                        02750000
+LCLSTKLN EQU   *-CMSCRAB      __subcom local stack size                 02760000
+         EJECT ,                                                        02770000
+         GCCCRAB ,                                                      02780000
+* --------------------------------------------------------------------- 02790000
+*        GCCLIB SUBCOM Registration info                                02800000
+* --------------------------------------------------------------------- 02810000
+SUBCOMRG DSECT ,                                                        02820000
+SCOMNEXT DS    A                  -> next SOBCOMREG in the list         02830000
+SCOMHNDL DS    A                  -> SUBCOM processing function         02840000
+SCMCMSCB DS    A                  -> CMSCRAB when SUBCOM SET issued     02850000
+SCOMCRAB DS    A                  -> GCCCBAR                            02860000
+SCOMNAME DS    CL8                SUBCOM name (CMS token format)        02870000
+SCOMRGLN EQU   (*-SUBCOMRG+7)/8                                         02880000
+         EJECT ,                                                        02890000
+         SCBLOCK ,                                                      02900000
+         REGEQU ,                                                       02910000
+         END                                                            02920000

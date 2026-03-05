@@ -83,6 +83,7 @@ int __cstub(PLIST *plist, EPLIST *eplist, void *gcclibvt) {
     gcccrab.atresult = &atresult;
     gcccrab.gmtimetm = &gmtimetm;
     gcccrab.strfbuf = &strfbuf;
+    gcccrab.subcomlist = NULL;
 
     return (__cstart(main));
 }
