@@ -143,6 +143,7 @@ int __scmset (char *name, SUBCOM_HANDLER *handler) {
      * program returns to CMS.
      */
     if (gcccrab->subcomlist == NULL) {
+    	gcccrab->saveexit = gcccrab->exitfunc;
         gcccrab->exitfunc = SubcomCleanup;
     }
 
@@ -185,6 +186,7 @@ int __scmset (char *name, SUBCOM_HANDLER *handler) {
 int __scmclr (char *name) {
     int rc = 0;
     char workname[8];
+    GCCCRAB *gcccrab = GETGCCCRAB();
 
     normalizeName(name, &workname);
 
@@ -192,6 +194,10 @@ int __scmclr (char *name) {
     SUBCOMREG *scomreg = findSubcomReg(workname, &scomback);
     if (scomreg != NULL) {
         scomback = scomreg->nextReg; /* remove from list */
+        if (gcccrab->subcomlist == NULL) {
+            /* fixup exitfunc if we just removed the last SUBCOM */
+        	gcccrab->exitfunc = gcccab->saveexit;
+        }
         rc = (int)__subcom(SCMCLR, scomreg);
     }
     return rc;
@@ -233,8 +239,6 @@ SCBLOCK *__scmqry (char *name) {
 /*  Will transfer to the normal exit function (__exit) once the     */
 /*  SUBCOM cleanup is complete.                                     */
 /********************************************************************/
-void __exit(int rc);                   /* gcccrab.exitfunc old value*/
-
 void SubcomCleanup (int rc) {
     GCCCRAB *gcccrab = GETGCCCRAB();
     SUBCOMREG *next = gcccrab->subcomlist;
@@ -244,5 +248,7 @@ void SubcomCleanup (int rc) {
         __subcom(SCMCLR, this);
         free(this);
     }
-    __exit(rc);
+    if (gcccrab->saveexit != NULL) {
+    	(gcccrab->saveexit)(rc);
+    }
 }

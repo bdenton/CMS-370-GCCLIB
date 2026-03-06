@@ -55,6 +55,7 @@ ATRESULT DS    F              char *atresult;
 GMTIMETM DS    F              struct tm *gmtimetm;
 STRFBUF  DS    F              char *strfbuf;
 SUBCOMLS DS    F              SUBCOMREG *subcomlist;
+SAVEEXIT DS    F              EXITFUNC *saveexit;
          SPACE
 GCCGLEN  EQU   *-GCCCRAB      length of the CRAB / Global Area
          MEND
