@@ -1,6 +1,6 @@
 *********************************************************************** 00010000
 * CMSSCOM contains C functions interfacing with CMS SUBCOM            * 00020000
-*    @@SUBCOM Handles SUNCOM macro invocations                        * 00030000
+*    @@SUBCOM Handles SUBCOM macro invocations                        * 00030000
 *    SCOMENTR Actual SUBCOM entry point called from CMS               * 00040000
 *                                                                     * 00050000
 * William Denton, Los Angeles, California; 2026                       * 00060000
@@ -249,15 +249,15 @@ LINEDISZ EQU   *-LINEDITP                                               02410000
 PARMLIST EQU   CMSCRAB+18*4   Build parameters after the registers      02490000
 *                                                                       02500000
 * --------------------------------------------------------------------- 02510000
-*        the SUBCOM initial entry does not need a 4k stack              02520000
+*        the SUBCOM initial entry does not need any local stack         02520000
 * --------------------------------------------------------------------- 02530000
-MINLEN   EQU   1024                    Minimum stack length             02540000
-MINSTKLN EQU   1024+MAINSTK-CMSCRAB    length of the minimum CRAB       02550000
+MINLEN   EQU   16                      Give it a couple of dwords       02540000
+MINSTKLN EQU   16+MAINSTK-CMSCRAB        for good measure               02550000
 * --------------------------------------------------------------------- 02560000
 *        working storage for this module                                02570000
 * --------------------------------------------------------------------- 02580000
          ORG   MAINSTK        Local variables start here                02590000
-SCOMVERB DS    CL8            SUBCOM verb qith error                    02600000
+SCOMVERB DS    CL8            SUBCOM verb with error                    02600000
 *                                                                       02610000
 PLISTS   DS    0D             Plists will be built here                 02620000
 *                                                                       02630000
