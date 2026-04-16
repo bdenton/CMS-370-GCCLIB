@@ -684,6 +684,31 @@ void *__dmsfre(int bytes, int type);
 #define CMSmemoryAlloc(i1, i2) (__dmsfre((i1),(i2)))
 #define CMS_NUCLEUS 0
 #define CMS_USER 1
+
+/**************************************************************************************************/
+/* CMSmem CMSmemoryAllocV(int bytes, int minbytes, int type)                                      */
+/*                                                                                                */
+/* Allocate a variable amount of free memory.                                                     */
+/*   bytes      is the maximum number of bytes to be allocated.                                   */
+/*   minbytes   is the minimum number of bytes to be allocated.                                   */
+/*   type       is the type of memory: CMS_NUCLEUS for NUCLEUS memory, CMS_USER for USER memory.  */
+/*                                                                                                */
+/* Returns:                                                                                       */
+/*    a CMSmem structure describing the memory allocated:                                         */
+/*       memSize   is the actual size of the allocated memory                                     */
+/*       memAddr   is the address of the allocated memory                                         */
+/* Notes:                                                                                         */
+/*    1.  If you allocate NUCLEUS memory, your program must be generated with the SYSTEM option.  */
+/*        Note that if such a program abnormally terminates, CMS does not release this memory.    */
+/**************************************************************************************************/
+typedef struct _CMSmem {
+    unsigned long  memSize;
+    void          *memAddr;
+} CMSmem;
+
+CMSmem _dmsfrev(int bytes, int minbytes, int type);
+
+#define CMSmemoryAllocV(i1, i2, i3) (_dmsfrev((i1),(i2),(i3)))
  
 /**************************************************************************************************/
 /* int CMSmemoryFree(void * memory)                                                               */

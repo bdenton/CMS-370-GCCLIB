@@ -5,6 +5,7 @@
 *    @@SVC202 Invoke a CMS system service or command.                 *
 *    @@CMSCMD Invoke a CMS system service or command.                 *
 *    @@DMSFRE Allocate free memory.                                   *
+*    @DMSFREV Allocate variable amount of free memory.                *
 *    @@DMSFRT Release allocated memory.                               *
 *    @@FSCLOS Close an open file and save it to disk.                 *
 *    @@FSERAS Delete a CMS file.                                      *
@@ -462,6 +463,7 @@ DMSFRET2 DS    0H             no memory
          L     R2,4(,R1)      get type parameter
 * ---------------------------------------------------------------------
 * For debugging...
+         B     OKAY           (remove to stop large (> 1M) calls)
          L     R3,0(,R1)      get number of bytes to allocate
          L     R4,=F'1000000'
          SR    R4,R3
@@ -509,6 +511,88 @@ FREERET  DS    0H
 NOMEMORY DS    0H
          SR    R15,R15        indicate no memory allocated
          B     FREERET
+         EJECT ,
+***********************************************************************
+* @DMSFREV  Entry Point                                               *
+* Allocate a variable amount of free memory                           *
+*                                                                     *
+* Syntax is:                                                          *
+*    _DMSFREV(int bytes, int minbytes, int type)                      *
+* where:                                                              *
+*    bytes     is the number of bytes to be allocated.                *
+*    type      is the type of memory: 0 for NUCLEUS, 1 for USER.      *
+* returns:                                                            *
+*    struct _CMSmem {                                                 *
+*       unsigned long memSize; Amount or memory allocated (=0 if the  *
+*                              minimum amount is not available)       *
+*       void         *memAddr; Address of allocated memory (NULL is   *
+*                              the minimum amount is not available)   *
+*    }                                                                *
+* Notes:                                                              *
+* 1. Since CMS allocates memory in doublewords, we add 15 to the      *
+*    bytes requested then divide by 8 to effectively round up and     *
+*    add an additional doubleword which we use in note 2.             *
+* 2. The first word is used to store the number of doublewords        *
+*    allocated, needed in @@DMSFRT.  The next word is 'GCC' followed  *
+*    by a 0 byte.  This helps detect memory overruns, I hope.         *
+* 3. Memory returned to the caller starts 8 bytes after the memory    *
+*    allocated to us by CMS.                                          *
+* 4. If you allocate NUCLEUS memory, your program must be generated   *
+*    with the SYSTEM option.  Note that if such a program abnormally  *
+*    terminates, CMS does not release this memory.                    *
+***********************************************************************
+         ENTRY @DMSFREV
+@DMSFREV DS    0H
+         STM   R14,R12,12(R13)
+         LR    R12,R15
+         LA    R15,@DMSFREV-CMSSYS
+         SLR   R12,R15
+*
+*        Incoming R0 is where the result should go
+         LR    R4,R0          Save result target
+         XC    0(8,R4),0(R4)  and clear the results
+*
+*        Get the input parameters
+         L     R2,0(,R1)      param1: max size to allocate
+         LA    R0,15(,R2)     convert to dwords (+1)
+         SRL   R0,3           ...
+         L     R2,4(,R1)      param2: min size to allocate
+         LA    R2,15(,R2)     convert to dwords (+1)
+         SRL   R2,3           ...
+         L     R3,8(,R1)      param3: NUCLEUS | USER
+*
+*        Route based on storage type         
+         LTR   R3,R3
+         BZ    FREVNUC        get nucleus memory
+*         
+* Use DMSFREE to allocate the memory.
+         DMSFREE DWORDS=(0),MIN=(2),TYPE=USER,ERR=DMSFREV2 
+         B     FREVMEM
+FREVNUC  DS    0H
+         DMSFREE DWORDS=(0),MIN=(2),TYPE=NUCLEUS,ERR=DMSFREV2
+FREVMEM  DS    0H
+         LTR   R15,R15        did we get the memory?
+         BNZ   DMSFREV2       no, quit now
+*
+*        Set up the marker         
+         ST    R0,0(,R1)      store number of doublewords allocated
+         MVC   4(4,R1),=X'C7C3C300' store marker: "GCC" C string
+*
+*        Pass back the altered size/addr
+         BCTR  R0,0           Decrement dword count
+         SLL   R0,3           * 8 = byte count         
+         LA    R1,8(,R1)      here is where user memory starts
+         STM   R0,R1,0(R4)    and place in the CMSmem structure
+         SR    R15,R15        indicate all OK
+*         
+DMSFREV1 DS    0H
+         L     R14,12(,R13)   restore our return address
+         LM    R0,R12,20(R13) restore the registers
+         BR    R14            return to our caller
+*         
+DMSFREV2 DS    0H             no memory
+         LA    R15,1          indicate error
+         B     DMSFREV1
          EJECT
 ***********************************************************************
 * @@DMSFRT  Entry Point                                               *
