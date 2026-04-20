@@ -196,7 +196,7 @@ int __scmclr (char *name) {
         scomback = scomreg->nextReg; /* remove from list */
         if (gcccrab->subcomlist == NULL) {
             /* fixup exitfunc if we just removed the last SUBCOM */
-        	gcccrab->exitfunc = gcccab->saveexit;
+        	gcccrab->exitfunc = gcccrab->saveexit;
         }
         rc = (int)__subcom(SCMCLR, scomreg);
     }
